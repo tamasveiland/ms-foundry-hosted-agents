@@ -184,8 +184,63 @@ Once your Azure environment is set up:
 
 1. **Verify deployment:** Check Azure portal to ensure all resources are created
 2. **Configure agent development:** Set up your local development environment for building agents
-3. **Deploy your first agent:** Use the Microsoft Agent Framework or LangGraph to create and deploy agents
+3. **Deploy your first agent:** See the "Deploying Hosted Agents" section below for detailed steps
 4. **Monitor and evaluate:** Use the built-in monitoring and evaluation tools
+
+## Deploying Hosted Agents
+
+After your infrastructure is provisioned, you can deploy containerized AI agents using the Azure Developer CLI. Hosted agents run in containers and can use frameworks like Microsoft Agent Framework, LangGraph, or custom Python/C# applications.
+
+### Initialize a New Agent
+
+Use the `azd ai agent init` command to scaffold a new agent from existing samples:
+
+```bash
+azd ai agent init -m https://github.com/microsoft-foundry/foundry-samples/blob/main/samples/python/hosted-agents/langgraph/calculator-agent/agent.yaml
+```
+
+This command will:
+- Download the agent sample from the specified repository
+- Set up the necessary project structure
+- Configure the agent for your AI Foundry project
+- Prepare container build and deployment configuration
+
+### Available Agent Samples
+
+The [Microsoft Foundry Samples](https://github.com/microsoft-foundry/foundry-samples) repository contains various agent templates:
+
+- **LangGraph Calculator Agent** - Mathematical computation agent using LangGraph
+- **Microsoft Agent Framework Samples** - Conversational agents with various capabilities  
+- **Custom Python Agents** - Templates for building your own agent logic
+
+### Build and Deploy Your Agent
+
+After initializing an agent:
+
+1. **Navigate to the agent directory:**
+   ```bash
+   cd <agent-folder-name>
+   ```
+
+2. **Build and deploy the agent:**
+   ```bash
+   azd ai agent deploy
+   ```
+
+3. **Test your deployed agent:**
+   ```bash
+   azd ai agent invoke --message "Hello, can you help me calculate 2+2?"
+   ```
+
+### Agent Development Workflow
+
+1. **Initialize** - Use `azd ai agent init` with a sample template
+2. **Customize** - Modify the agent code for your specific use case
+3. **Deploy** - Use `azd ai agent deploy` to build and push to Azure
+4. **Test** - Invoke your agent to verify it works correctly
+5. **Iterate** - Make changes and redeploy as needed
+
+> **Note:** Ensure Docker Desktop is running before deploying agents, as the deployment process builds container images locally.
 
 ## Troubleshooting
 
