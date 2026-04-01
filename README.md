@@ -151,6 +151,33 @@ azd env set AI_PROJECT_DEPLOYMENTS '[{"name":"gpt-54-mini","model":{"name":"gpt-
 
 > **Note:** Model availability and capacity limits vary by region. Ensure your chosen models are available in your selected Azure region.
 
+## Hosted Agents Configuration
+
+This template is pre-configured to support **hosted agents**, which allows you to deploy containerized AI agents to Azure. By default, hosted agents are **enabled** (`ENABLE_HOSTED_AGENTS=true`), which automatically provisions:
+
+- **Azure Container Registry (ACR)** - For storing your agent container images
+- **Proper RBAC permissions** - For pushing/pulling container images
+- **AI Foundry connections** - To link ACR with your AI project
+
+### Disabling Hosted Agents
+
+If you only plan to use prompt-based agents (no containers), you can disable hosted agents:
+
+```bash
+azd env set ENABLE_HOSTED_AGENTS false
+```
+
+This will skip ACR creation and reduce costs, but you won't be able to deploy containerized agents.
+
+### Using Existing Container Registry
+
+If you already have an Azure Container Registry, you can use it instead of creating a new one:
+
+```bash
+azd env set AZURE_CONTAINER_REGISTRY_RESOURCE_ID "/subscriptions/your-sub-id/resourceGroups/your-rg/providers/Microsoft.ContainerRegistry/registries/your-acr"
+azd env set AZURE_CONTAINER_REGISTRY_ENDPOINT "your-acr.azurecr.io"
+```
+
 ## Next Steps
 
 Once your Azure environment is set up:
