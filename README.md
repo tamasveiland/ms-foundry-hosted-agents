@@ -107,29 +107,29 @@ After running `azd up`, the following Azure resources will be created:
 
 ## Customizing Model Deployments
 
-By default, this template deploys a **GPT-5.4-mini** model with GlobalStandard SKU and a capacity of 50. You can customize the model deployments before running `azd up` by setting the `AI_PROJECT_DEPLOYMENTS` environment variable.
+By default, this template **does not deploy any models automatically**. You need to explicitly configure model deployments before running `azd up` by setting the `AI_PROJECT_DEPLOYMENTS` environment variable.
 
-### Default Deployment
+### Adding Model Deployments
 
-The default configuration includes:
-- **Model**: GPT-5.4-mini (version 2024-07-18)
-- **SKU**: GlobalStandard
-- **Capacity**: 50
-- **Deployment Name**: gpt-54-mini
-
-### Custom Deployment Examples
-
-**1. Change capacity or model version:**
+**Option 1: Using azd env set command:**
 ```bash
-azd env set AI_PROJECT_DEPLOYMENTS '[{"name":"gpt-54-mini","model":{"name":"gpt-5.4-mini","format":"OpenAI","version":"2024-07-18"},"sku":{"name":"GlobalStandard","capacity":100}}]'
+azd env set AI_PROJECT_DEPLOYMENTS '[{"name":"gpt-54-mini","model":{"name":"gpt-5.4-mini","format":"OpenAI","version":"2026-03-17"},"sku":{"name":"GlobalStandard","capacity":50}}]'
 ```
 
-**2. Deploy multiple models:**
+**Option 2: Direct .env file editing:**
+Add this line to your `.azure/{env-name}/.env` file:
+```
+AI_PROJECT_DEPLOYMENTS="[{\\\"name\\\":\\\"gpt-54-mini\\\",\\\"model\\\":{\\\"name\\\":\\\"gpt-5.4-mini\\\",\\\"format\\\":\\\"OpenAI\\\",\\\"version\\\":\\\"2026-03-17\\\"},\\\"sku\\\":{\\\"name\\\":\\\"GlobalStandard\\\",\\\"capacity\\\":50}}]"
+```
+
+### Additional Examples
+
+**Deploy multiple models (using azd env set):**
 ```bash
 azd env set AI_PROJECT_DEPLOYMENTS '[
   {
     "name":"gpt-54-mini",
-    "model":{"name":"gpt-5.4-mini","format":"OpenAI","version":"2024-07-18"},
+    "model":{"name":"gpt-5.4-mini","format":"OpenAI","version":"2026-03-17"},
     "sku":{"name":"GlobalStandard","capacity":50}
   },
   {
@@ -140,9 +140,9 @@ azd env set AI_PROJECT_DEPLOYMENTS '[
 ]'
 ```
 
-**3. Use different SKU types:**
+**Use different SKU types:**
 ```bash
-azd env set AI_PROJECT_DEPLOYMENTS '[{"name":"gpt-54-mini","model":{"name":"gpt-5.4-mini","format":"OpenAI","version":"2024-07-18"},"sku":{"name":"Standard","capacity":20}}]'
+azd env set AI_PROJECT_DEPLOYMENTS '[{"name":"gpt-54-mini","model":{"name":"gpt-5.4-mini","format":"OpenAI","version":"2026-03-17"},"sku":{"name":"Standard","capacity":20}}]'
 ```
 
 ### Available SKU Types
@@ -193,6 +193,11 @@ Once your Azure environment is set up:
 - **Region Availability:** If deployment fails, try a different supported region
 - **Quota Limits:** Check Azure quotas if you encounter capacity issues
 - **Extension Issues:** Ensure the Azure AI Agents extension is installed: `azd extension list`
+- **JSON Parsing Error:** If you get "invalid character 'n' after object key:value pair" when running `azd provision`, it's likely due to complex JSON in environment variables. Reset the deployments variable:
+  ```bash
+  azd env set AI_PROJECT_DEPLOYMENTS "[]"
+  ```
+  Then set your model deployments using simple JSON as shown in the examples above.
 
 ## Clean Up Resources
 
