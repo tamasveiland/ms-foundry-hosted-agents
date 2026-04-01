@@ -105,6 +105,52 @@ After running `azd up`, the following Azure resources will be created:
 - **Storage Account** - For data and model storage
 - **Managed Identity** - For secure resource access
 
+## Customizing Model Deployments
+
+By default, this template deploys a **GPT-5.4-mini** model with GlobalStandard SKU and a capacity of 50. You can customize the model deployments before running `azd up` by setting the `AI_PROJECT_DEPLOYMENTS` environment variable.
+
+### Default Deployment
+
+The default configuration includes:
+- **Model**: GPT-5.4-mini (version 2024-07-18)
+- **SKU**: GlobalStandard
+- **Capacity**: 50
+- **Deployment Name**: gpt-54-mini
+
+### Custom Deployment Examples
+
+**1. Change capacity or model version:**
+```bash
+azd env set AI_PROJECT_DEPLOYMENTS '[{"name":"gpt-54-mini","model":{"name":"gpt-5.4-mini","format":"OpenAI","version":"2024-07-18"},"sku":{"name":"GlobalStandard","capacity":100}}]'
+```
+
+**2. Deploy multiple models:**
+```bash
+azd env set AI_PROJECT_DEPLOYMENTS '[
+  {
+    "name":"gpt-54-mini",
+    "model":{"name":"gpt-5.4-mini","format":"OpenAI","version":"2024-07-18"},
+    "sku":{"name":"GlobalStandard","capacity":50}
+  },
+  {
+    "name":"gpt-4o",
+    "model":{"name":"gpt-4o","format":"OpenAI","version":"2024-05-13"},
+    "sku":{"name":"GlobalStandard","capacity":30}
+  }
+]'
+```
+
+**3. Use different SKU types:**
+```bash
+azd env set AI_PROJECT_DEPLOYMENTS '[{"name":"gpt-54-mini","model":{"name":"gpt-5.4-mini","format":"OpenAI","version":"2024-07-18"},"sku":{"name":"Standard","capacity":20}}]'
+```
+
+### Available SKU Types
+- **GlobalStandard** - Recommended for most scenarios, provides global load balancing
+- **Standard** - Region-specific deployment for lower latency requirements
+
+> **Note:** Model availability and capacity limits vary by region. Ensure your chosen models are available in your selected Azure region.
+
 ## Next Steps
 
 Once your Azure environment is set up:
