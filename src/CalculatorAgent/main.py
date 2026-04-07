@@ -1,7 +1,7 @@
 import os
 import logging
 
-from langchain.chat_models import init_chat_model
+from langchain_openai import AzureChatOpenAI
 from langchain_core.messages import SystemMessage, ToolMessage
 from langchain_core.tools import tool
 from langgraph.graph import (
@@ -60,16 +60,29 @@ _llm_with_tools = None
 def llm():
     try:
         deployment_name = os.getenv("AZURE_AI_MODEL_DEPLOYMENT_NAME", "gpt-4o-mini")
+        azure_endpoint = os.getenv("AZURE_OPENAI_ENDPOINT")
+        api_version = os.getenv("OPENAI_API_VERSION", "2024-06-01")
+        
+        print(f"[DEBUG] Initializing LLM:")
+        print(f"[DEBUG]   Deployment: {deployment_name}")
+        print(f"[DEBUG]   Endpoint: {azure_endpoint}")
+        print(f"[DEBUG]   API Version: {api_version}")
+        
         credential = DefaultAzureCredential()
         token_provider = get_bearer_token_provider(
             credential, "https://cognitiveservices.azure.com/.default"
         )
-        llm = init_chat_model(
-            f"azure_openai:{deployment_name}",
+        
+        llm = AzureChatOpenAI(
+            azure_deployment=deployment_name,
+            azure_endpoint=azure_endpoint,
+            api_version=api_version,
             azure_ad_token_provider=token_provider,
         )
+        print("[DEBUG] LLM initialized successfully")
         return llm
-    except Exception:
+    except Exception as e:
+        print(f"[DEBUG] Error initializing LLM: {e}")
         logger.exception("Failed to initialize client of large language model")
         raise
 
