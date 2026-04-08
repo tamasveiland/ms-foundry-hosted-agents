@@ -1,6 +1,11 @@
 import os
 import logging
 
+# Load environment variables from .env file for local development/debugging
+# This allows running the agent directly with python main.py or via VS Code debugger
+from dotenv import load_dotenv
+load_dotenv()
+
 # ============================================================================
 # CRITICAL: Tracing configuration MUST happen BEFORE any LangChain imports
 # LangSmith reads these environment variables during module import time

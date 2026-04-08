@@ -7,7 +7,7 @@ Before deploying, verify the agent works locally.
 > - Azure Developer CLI (`azd`)
 > - Azure authentication (`azd auth login`)
 
-### Start the agent with azd (Recommended)
+### Option 1: Start the agent with azd (Recommended)
 
 The simplest way to test locally is using the Azure Developer CLI:
 
@@ -20,6 +20,53 @@ This command automatically:
 - Sets up the environment variables
 - Installs dependencies  
 - Starts the agent
+
+### Option 2: Debug in VS Code
+
+For debugging with breakpoints:
+
+1. **Create .env file from azd environment:**
+   ```powershell
+   cd src/CalculatorAgent
+   .\setup-local-env.ps1
+   ```
+
+2. **Open AI Toolkit Trace Viewer:**
+   - Press `Ctrl+Shift+P`
+   - Run: `AI Toolkit: Open Trace Viewer`
+
+3. **Start debugging:**
+   - Press `F5` or select "Debug Calculator Agent" from the debug dropdown
+   - The agent will start on http://localhost:8088
+   - Traces will appear in AI Toolkit
+
+4. **Invoke the agent:**
+   In a separate terminal:
+   ```bash
+   azd ai agent invoke --local "What is 25 multiplied by 4?"
+   ```
+
+### Option 3: Run Python directly
+
+```bash
+cd src/CalculatorAgent
+python main.py
+```
+
+> **Note:** Make sure you've created the `.env` file first (see Option 2, step 1)
+
+### Tracing
+
+The agent automatically configures tracing based on the environment:
+
+- **Local development:** Uses AI Toolkit OTLP exporter (`http://localhost:4318`)
+- **Production (Foundry):** Uses Azure Monitor Application Insights
+
+To view traces locally:
+1. Open AI Toolkit Trace Viewer in VS Code
+2. Run the agent
+3. Invoke with test messages
+4. View spans, tool calls, and LLM interactions in the trace viewer
 
 ### Invoke the agent
 
