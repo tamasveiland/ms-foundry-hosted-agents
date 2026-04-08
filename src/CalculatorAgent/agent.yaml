@@ -16,6 +16,8 @@ protocols:
     - protocol: responses
       version: v1
 environment_variables:
+    - name: AGENT_ENVIRONMENT
+      value: production
     - name: AZURE_OPENAI_ENDPOINT
       value: ${AZURE_OPENAI_ENDPOINT}
     - name: OPENAI_API_VERSION

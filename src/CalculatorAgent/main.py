@@ -1,6 +1,53 @@
 import os
 import logging
 
+# ============================================================================
+# CRITICAL: Tracing configuration MUST happen BEFORE any LangChain imports
+# LangSmith reads these environment variables during module import time
+# ============================================================================
+
+def is_running_in_foundry() -> bool:
+    """
+    Detect if the agent is running as a hosted agent in MS Foundry.
+    
+    Returns True when running in Foundry, False when running locally.
+    """
+    # Method 1: Explicit environment variable (recommended)
+    agent_env = os.getenv("AGENT_ENVIRONMENT", "").lower()
+    if agent_env in ["production", "foundry", "hosted"]:
+        return True
+    if agent_env == "local":
+        return False
+    
+    # Method 2: Check for both App Insights and Azure OpenAI endpoint
+    has_app_insights = bool(os.getenv("APPLICATIONINSIGHTS_CONNECTION_STRING"))
+    has_azure_endpoint = bool(os.getenv("AZURE_OPENAI_ENDPOINT"))
+    
+    if has_app_insights and has_azure_endpoint:
+        hostname = os.getenv("HOSTNAME", "")
+        if len(hostname) > 0 and not hostname.startswith("DESKTOP") and not hostname.startswith("LAPTOP"):
+            return True
+    
+    return False
+
+# Configure tracing BEFORE any LangChain/OpenTelemetry imports
+is_local = not is_running_in_foundry()
+
+if is_local:
+    # Local development: Use agentserver's built-in OTLP exporter for AI Toolkit tracing
+    # The agentserver natively supports OTLP via OTEL_EXPORTER_ENDPOINT
+    os.environ["OTEL_EXPORTER_ENDPOINT"] = "http://localhost:4318/v1/traces"
+    
+    # Remove App Insights connection string to use OTLP only
+    if "APPLICATIONINSIGHTS_CONNECTION_STRING" in os.environ:
+        del os.environ["APPLICATIONINSIGHTS_CONNECTION_STRING"]
+    
+    print("[TRACE] AI Toolkit tracing configured via agentserver OTLP exporter")
+    print("[TRACE] OTLP endpoint: http://localhost:4318/v1/traces")
+else:
+    print("[TRACE] Azure Monitor tracing will be configured (production mode)")
+
+# Now safe to import LangChain and other modules
 from langchain_openai import AzureChatOpenAI
 from langchain_core.messages import SystemMessage, ToolMessage
 from langchain_core.tools import tool
@@ -22,16 +69,17 @@ from opentelemetry.trace import Status, StatusCode
 
 logger = logging.getLogger(__name__)
 
-# Configure Azure Monitor OpenTelemetry
-connection_string = os.getenv("APPLICATIONINSIGHTS_CONNECTION_STRING")
-if connection_string:
-    configure_azure_monitor(
-        connection_string=connection_string,
-        logger_name=__name__,
-    )
-    logger.info("Azure Monitor OpenTelemetry configured successfully")
-else:
-    logger.warning("APPLICATIONINSIGHTS_CONNECTION_STRING not set, tracing disabled")
+# Configure Azure Monitor for production (after imports)
+if not is_local:
+    connection_string = os.getenv("APPLICATIONINSIGHTS_CONNECTION_STRING")
+    if connection_string:
+        configure_azure_monitor(
+            connection_string=connection_string,
+            logger_name=__name__,
+        )
+        logger.info("Azure Monitor OpenTelemetry configured successfully")
+    else:
+        logger.warning("APPLICATIONINSIGHTS_CONNECTION_STRING not set, tracing disabled")
 
 # Get tracer for instrumenting custom operations
 tracer = trace.get_tracer(__name__)
