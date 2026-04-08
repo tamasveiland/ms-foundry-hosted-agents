@@ -162,6 +162,8 @@ output AZURE_AI_PROJECT_ENDPOINT string = aiProject.outputs.AZURE_AI_PROJECT_END
 output AZURE_OPENAI_ENDPOINT string = aiProject.outputs.AZURE_OPENAI_ENDPOINT
 output APPLICATIONINSIGHTS_CONNECTION_STRING string = aiProject.outputs.APPLICATIONINSIGHTS_CONNECTION_STRING
 output APPLICATIONINSIGHTS_RESOURCE_ID string = aiProject.outputs.APPLICATIONINSIGHTS_RESOURCE_ID
+output LOG_ANALYTICS_WORKSPACE_ID string = aiProject.outputs.LOG_ANALYTICS_WORKSPACE_ID
+output QUERY_PACK_ID string = aiProject.outputs.QUERY_PACK_ID
 
 // Dependent Resources and Connections
 

@@ -76,7 +76,8 @@ var bingConnectionName = hasBingConnection ? filter(additionalDependentResources
 var bingCustomConnectionName = hasBingCustomConnection ? filter(additionalDependentResources, conn => conn.resource == 'bing_custom_grounding')[0].connectionName : ''
 
 // Enable monitoring via Log Analytics and Application Insights
-module logAnalytics '../monitor/loganalytics.bicep' = if (shouldCreateAppInsights) {
+// Create Log Analytics and Query Pack whenever monitoring is enabled
+module logAnalytics '../monitor/loganalytics.bicep' = if (enableMonitoring) {
   name: 'logAnalytics'
   params: {
     location: location
@@ -85,13 +86,38 @@ module logAnalytics '../monitor/loganalytics.bicep' = if (shouldCreateAppInsight
   }
 }
 
+module queryPack '../monitor/querypack.bicep' = if (enableMonitoring) {
+  name: 'queryPack'
+  params: {
+    location: location
+    tags: tags
+    name: 'queries-${resourceToken}'
+  }
+  dependsOn: [
+    logAnalytics
+  ]
+}
+
+// Only create new Application Insights if no existing connection/connection string
 module applicationInsights '../monitor/applicationinsights.bicep' = if (shouldCreateAppInsights) {
   name: 'applicationInsights'
   params: {
     location: location
     tags: tags
     name: 'appi-${resourceToken}'
-    logAnalyticsWorkspaceId: logAnalytics.outputs.id
+    logAnalyticsWorkspaceId: logAnalytics!.outputs.id
+  }
+}
+
+// Create AI Agent Monitoring Workbook when monitoring is enabled
+module agentWorkbook '../monitor/workbook.bicep' = if (enableMonitoring) {
+  name: 'agentMonitoringWorkbook'
+  params: {
+    location: location
+    tags: tags
+    name: 'ai-agent-workbook-${resourceToken}'
+    displayName: 'AI Agent Monitoring - ${aiFoundryProjectName}'
+    applicationInsightsId: shouldCreateAppInsights ? applicationInsights!.outputs.id : existingApplicationInsightsResourceId
   }
 }
 
@@ -164,15 +190,15 @@ resource appInsightConnection 'Microsoft.CognitiveServices/accounts/projects/con
   name: 'appi-connection'
   properties: {
     category: 'AppInsights'
-    target: applicationInsights.outputs.id
+    target: applicationInsights!.outputs.id
     authType: 'ApiKey'
     isSharedToAll: true
     credentials: {
-      key: applicationInsights.outputs.connectionString
+      key: applicationInsights!.outputs.connectionString
     }
     metadata: {
       ApiType: 'Azure'
-      ResourceId: applicationInsights.outputs.id
+      ResourceId: applicationInsights!.outputs.id
     }
   }
 }
@@ -370,8 +396,12 @@ output aiServicesAccountName string = aiAccount.name
 output aiServicesProjectName string = aiAccount::project.name
 output aiServicesPrincipalId string = aiAccount.identity.principalId
 output projectName string = aiAccount::project.name
-output APPLICATIONINSIGHTS_CONNECTION_STRING string = shouldCreateAppInsights ? applicationInsights.outputs.connectionString : (hasExistingAppInsightsConnectionString ? existingApplicationInsightsConnectionString : '')
-output APPLICATIONINSIGHTS_RESOURCE_ID string = shouldCreateAppInsights ? applicationInsights.outputs.id : (hasExistingAppInsightsConnectionString ? existingApplicationInsightsResourceId : '')
+output APPLICATIONINSIGHTS_CONNECTION_STRING string = shouldCreateAppInsights ? applicationInsights!.outputs.connectionString : (hasExistingAppInsightsConnectionString ? existingApplicationInsightsConnectionString : '')
+output APPLICATIONINSIGHTS_RESOURCE_ID string = shouldCreateAppInsights ? applicationInsights!.outputs.id : (hasExistingAppInsightsConnectionString ? existingApplicationInsightsResourceId : '')
+output LOG_ANALYTICS_WORKSPACE_ID string = enableMonitoring ? logAnalytics!.outputs.id : ''
+output QUERY_PACK_ID string = enableMonitoring ? queryPack!.outputs.id : ''
+output AI_AGENT_WORKBOOK_ID string = enableMonitoring ? agentWorkbook!.outputs.workbookId : ''
+output AI_AGENT_WORKBOOK_NAME string = enableMonitoring ? agentWorkbook!.outputs.workbookName : ''
 
 // Grouped dependent resources outputs
 output dependentResources object = {
