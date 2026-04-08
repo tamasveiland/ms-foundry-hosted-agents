@@ -1,2 +1,7 @@
 azure-ai-agentserver-langgraph==1.0.0b17
 python-dotenv
+azure-monitor-opentelemetry
+opentelemetry-api
+opentelemetry-sdk
+opentelemetry-instrumentation-httpx
+opentelemetry-instrumentation-requests

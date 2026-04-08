@@ -15,10 +15,29 @@ from azure.identity import DefaultAzureCredential, get_bearer_token_provider
 
 from azure.ai.agentserver.langgraph import from_langgraph
 
+# OpenTelemetry tracing configuration
+from azure.monitor.opentelemetry import configure_azure_monitor
+from opentelemetry import trace
+from opentelemetry.trace import Status, StatusCode
+
 logger = logging.getLogger(__name__)
 
+# Configure Azure Monitor OpenTelemetry
+connection_string = os.getenv("APPLICATIONINSIGHTS_CONNECTION_STRING")
+if connection_string:
+    configure_azure_monitor(
+        connection_string=connection_string,
+        logger_name=__name__,
+    )
+    logger.info("Azure Monitor OpenTelemetry configured successfully")
+else:
+    logger.warning("APPLICATIONINSIGHTS_CONNECTION_STRING not set, tracing disabled")
 
-# Define tools
+# Get tracer for instrumenting custom operations
+tracer = trace.get_tracer(__name__)
+
+
+# Define tools with tracing
 @tool
 def multiply(a: int, b: int) -> int:
     """Multiply a and b.
@@ -27,7 +46,14 @@ def multiply(a: int, b: int) -> int:
         a: first int
         b: second int
     """
-    return a * b
+    with tracer.start_as_current_span("tool.multiply") as span:
+        span.set_attribute("gen_ai.tool.name", "multiply")
+        span.set_attribute("tool.a", a)
+        span.set_attribute("tool.b", b)
+        result = a * b
+        span.set_attribute("tool.result", result)
+        span.set_status(Status(StatusCode.OK))
+        return result
 
 
 @tool
@@ -38,7 +64,14 @@ def add(a: int, b: int) -> int:
         a: first int
         b: second int
     """
-    return a + b
+    with tracer.start_as_current_span("tool.add") as span:
+        span.set_attribute("gen_ai.tool.name", "add")
+        span.set_attribute("tool.a", a)
+        span.set_attribute("tool.b", b)
+        result = a + b
+        span.set_attribute("tool.result", result)
+        span.set_status(Status(StatusCode.OK))
+        return result
 
 
 @tool
@@ -49,7 +82,19 @@ def divide(a: int, b: int) -> float:
         a: first int
         b: second int
     """
-    return a / b
+    with tracer.start_as_current_span("tool.divide") as span:
+        span.set_attribute("gen_ai.tool.name", "divide")
+        span.set_attribute("tool.a", a)
+        span.set_attribute("tool.b", b)
+        try:
+            result = a / b
+            span.set_attribute("tool.result", result)
+            span.set_status(Status(StatusCode.OK))
+            return result
+        except ZeroDivisionError as e:
+            span.set_status(Status(StatusCode.ERROR, "Division by zero"))
+            span.record_exception(e)
+            raise
 
 
 # Augment the LLM with tools
@@ -95,9 +140,12 @@ def llm_with_tools():
 # Nodes
 def llm_call(state: MessagesState):
     """LLM decides whether to call a tool or not"""
-    return {
-        "messages": [
-            llm_with_tools().invoke(
+    with tracer.start_as_current_span("agent.llm_call") as span:
+        span.set_attribute("gen_ai.operation.name", "chat")
+        span.set_attribute("agent.node", "llm_call")
+        
+        try:
+            response = llm_with_tools().invoke(
                 [
                     SystemMessage(
                         content="You are a helpful assistant tasked with performing arithmetic on a set of inputs."
@@ -105,19 +153,42 @@ def llm_call(state: MessagesState):
                 ]
                 + state["messages"]
             )
-        ]
-    }
+            
+            # Track token usage if available
+            if hasattr(response, "response_metadata"):
+                metadata = response.response_metadata
+                if "token_usage" in metadata:
+                    token_usage = metadata["token_usage"]
+                    span.set_attribute("gen_ai.usage.input_tokens", token_usage.get("prompt_tokens", 0))
+                    span.set_attribute("gen_ai.usage.output_tokens", token_usage.get("completion_tokens", 0))
+            
+            span.set_status(Status(StatusCode.OK))
+            return {"messages": [response]}
+        except Exception as e:
+            span.set_status(Status(StatusCode.ERROR, str(e)))
+            span.record_exception(e)
+            raise
 
 
 def tool_node(state: dict):
     """Performs the tool call"""
-
-    result = []
-    for tool_call in state["messages"][-1].tool_calls:
-        tool = tools_by_name[tool_call["name"]]
-        observation = tool.invoke(tool_call["args"])
-        result.append(ToolMessage(content=observation, tool_call_id=tool_call["id"]))
-    return {"messages": result}
+    with tracer.start_as_current_span("agent.tool_execution") as span:
+        span.set_attribute("agent.node", "environment")
+        
+        result = []
+        tool_calls = state["messages"][-1].tool_calls
+        span.set_attribute("tool.call_count", len(tool_calls))
+        
+        for i, tool_call in enumerate(tool_calls):
+            tool_name = tool_call["name"]
+            span.set_attribute(f"tool.{i}.name", tool_name)
+            
+            tool = tools_by_name[tool_name]
+            observation = tool.invoke(tool_call["args"])
+            result.append(ToolMessage(content=observation, tool_call_id=tool_call["id"]))
+        
+        span.set_status(Status(StatusCode.OK))
+        return {"messages": result}
 
 
 # Conditional edge function to route to the tool node or end based upon whether the LLM made a tool call
