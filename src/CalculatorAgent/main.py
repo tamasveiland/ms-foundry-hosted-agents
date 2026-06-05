@@ -50,7 +50,18 @@ if is_local:
     print("[TRACE] AI Toolkit tracing configured via agentserver OTLP exporter")
     print("[TRACE] OTLP endpoint: http://localhost:4318/v1/traces")
 else:
-    print("[TRACE] Azure Monitor tracing will be configured (production mode)")
+    # Production/Foundry: Configure Azure Monitor BEFORE imports
+    from azure.monitor.opentelemetry import configure_azure_monitor
+    
+    connection_string = os.getenv("APPLICATIONINSIGHTS_CONNECTION_STRING")
+    if connection_string:
+        configure_azure_monitor(
+            connection_string=connection_string,
+            logger_name=__name__,
+        )
+        print("[TRACE] Azure Monitor OpenTelemetry configured successfully")
+    else:
+        print("[TRACE] WARNING: APPLICATIONINSIGHTS_CONNECTION_STRING not set, tracing disabled")
 
 # Now safe to import LangChain and other modules
 from langchain_openai import AzureChatOpenAI
@@ -67,24 +78,11 @@ from azure.identity import DefaultAzureCredential, get_bearer_token_provider
 
 from azure.ai.agentserver.langgraph import from_langgraph
 
-# OpenTelemetry tracing configuration
-from azure.monitor.opentelemetry import configure_azure_monitor
+# OpenTelemetry tracing imports
 from opentelemetry import trace
 from opentelemetry.trace import Status, StatusCode
 
 logger = logging.getLogger(__name__)
-
-# Configure Azure Monitor for production (after imports)
-if not is_local:
-    connection_string = os.getenv("APPLICATIONINSIGHTS_CONNECTION_STRING")
-    if connection_string:
-        configure_azure_monitor(
-            connection_string=connection_string,
-            logger_name=__name__,
-        )
-        logger.info("Azure Monitor OpenTelemetry configured successfully")
-    else:
-        logger.warning("APPLICATIONINSIGHTS_CONNECTION_STRING not set, tracing disabled")
 
 # Get tracer for instrumenting custom operations
 tracer = trace.get_tracer(__name__)
