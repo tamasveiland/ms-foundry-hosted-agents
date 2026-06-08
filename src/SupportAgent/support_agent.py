@@ -25,6 +25,11 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Silence verbose Azure Monitor exporter logs in console output.
+_azure_monitor_logger = logging.getLogger("azure.monitor.opentelemetry.exporter.export._base")
+_azure_monitor_logger.setLevel(logging.ERROR)
+_azure_monitor_logger.propagate = False
+
 
 def _apply_streaming_function_name_workaround() -> None:
     """Patch known hosting bug where streamed function calls may have empty names."""
