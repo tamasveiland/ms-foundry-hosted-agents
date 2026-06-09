@@ -222,12 +222,17 @@ After initializing an agent:
    cd <agent-folder-name>
    ```
 
-2. **Build and deploy the agent:**
+2. **Set the Foundry project endpoint (required for deploy):**
+   ```bash
+   azd env set FOUNDRY_PROJECT_ENDPOINT "https://<your-project-name>.services.ai.azure.com/api/projects/<your-project-name>"
+   ```
+
+3. **Build and deploy the agent:**
    ```bash
    azd ai agent deploy
    ```
 
-3. **Test your deployed agent:**
+4. **Test your deployed agent:**
    ```bash
    azd ai agent invoke --message "Hello, can you help me calculate 2+2?"
    ```

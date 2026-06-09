@@ -3,3 +3,4 @@ agent-framework-openai
 agent-framework-foundry-hosting
 azure-identity
 python-dotenv
+httpx

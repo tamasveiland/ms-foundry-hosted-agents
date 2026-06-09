@@ -62,8 +62,13 @@ var hasExistingAcr = !empty(existingContainerRegistryResourceId)
 var hasExistingAcrConnection = !empty(existingAcrConnectionName)
 var hasExistingAppInsightsConnection = !empty(existingAppInsightsConnectionName)
 var hasExistingAppInsightsConnectionString = !empty(existingApplicationInsightsConnectionString)
-// Only create new App Insights resources if monitoring enabled and no existing connection/connection string
-var shouldCreateAppInsights = enableMonitoring && !hasExistingAppInsightsConnection && !hasExistingAppInsightsConnectionString
+var hasExistingAppInsightsResourceId = !empty(existingApplicationInsightsResourceId)
+// Treat existing App Insights configuration as valid only when all required values are provided.
+// This avoids skipping connection creation when only a connection name is set in env values.
+var hasValidExistingAppInsightsConnection = hasExistingAppInsightsConnection && hasExistingAppInsightsConnectionString && hasExistingAppInsightsResourceId
+var canCreateExistingAppInsightsConnection = hasExistingAppInsightsConnectionString && hasExistingAppInsightsResourceId
+// Create new App Insights resources unless we can safely reuse or create an existing connection.
+var shouldCreateAppInsights = enableMonitoring && !hasValidExistingAppInsightsConnection && !canCreateExistingAppInsightsConnection
 var hasSearchConnection = length(filter(additionalDependentResources, conn => conn.resource == 'azure_ai_search')) > 0
 var hasBingConnection = length(filter(additionalDependentResources, conn => conn.resource == 'bing_grounding')) > 0
 var hasBingCustomConnection = length(filter(additionalDependentResources, conn => conn.resource == 'bing_custom_grounding')) > 0
@@ -204,7 +209,7 @@ resource appInsightConnection 'Microsoft.CognitiveServices/accounts/projects/con
 }
 
 // Create connection to existing App Insights - if user provided connection string but no existing connection
-resource existingAppInsightConnection 'Microsoft.CognitiveServices/accounts/projects/connections@2025-04-01-preview' = if (enableMonitoring && hasExistingAppInsightsConnectionString && !hasExistingAppInsightsConnection && !empty(existingApplicationInsightsResourceId)) {
+resource existingAppInsightConnection 'Microsoft.CognitiveServices/accounts/projects/connections@2025-04-01-preview' = if (enableMonitoring && canCreateExistingAppInsightsConnection && !hasValidExistingAppInsightsConnection) {
   parent: aiAccount::project
   name: 'appi-connection'
   properties: {
@@ -437,6 +442,8 @@ output dependentResources object = {
   storage: {
     accountName: hasStorageConnection ? storage!.outputs.storageAccountName : ''
     connectionName: hasStorageConnection ? storage!.outputs.storageConnectionName : ''
+    approvalAuditTableName: hasStorageConnection ? storage!.outputs.approvalAuditTableName : ''
+    tableEndpoint: hasStorageConnection ? storage!.outputs.storageTableEndpoint : ''
   }
 }
 

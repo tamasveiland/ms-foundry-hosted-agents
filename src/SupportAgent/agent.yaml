@@ -10,3 +10,11 @@ environment_variables:
       value: ${AZURE_AI_PROJECT_ENDPOINT}
     - name: AZURE_AI_MODEL_DEPLOYMENT_NAME
       value: ${AZURE_AI_MODEL_DEPLOYMENT_NAME}
+    - name: APPROVAL_SERVICE_URL
+      value: ${APPROVAL_SERVICE_URL}
+    - name: APPROVAL_SERVICE_API_KEY
+      value: ${APPROVAL_SERVICE_API_KEY}
+    - name: APPROVAL_TIMEOUT_SECONDS
+      value: ${APPROVAL_TIMEOUT_SECONDS}
+    - name: APPROVAL_FAIL_MODE
+      value: ${APPROVAL_FAIL_MODE}

@@ -72,6 +72,13 @@ var aiProjectDeployments = json(aiProjectDeploymentsJson)
 var aiProjectConnections = json(aiProjectConnectionsJson)
 var aiProjectDependentResources = json(aiProjectDependentResourcesJson)
 
+// azd can provide dependent resources using either 'resource' (legacy) or
+// 'type' (current schema). Normalize to a single shape for template logic.
+var normalizedDependentResources = [for dep in aiProjectDependentResources: {
+  resource: contains(dep, 'resource') ? dep.resource : (contains(dep, 'type') ? dep.type : '')
+  connectionName: dep.connectionName
+}]
+
 @description('Enable hosted agent deployment')
 param enableHostedAgents bool
 
@@ -87,13 +94,13 @@ param existingContainerRegistryEndpoint string = ''
 @description('Optional. Name of an existing ACR connection on the Foundry project. If provided, no new ACR or connection will be created.')
 param existingAcrConnectionName string = ''
 
-@description('Optional. Existing Application Insights connection string. If provided, a connection will be created but no new App Insights resource.')
+@description('Optional. Existing Application Insights connection string. Use together with existingApplicationInsightsResourceId when reusing an existing App Insights resource. If provided without an existingAppInsightsConnectionName, the template creates/updates appi-connection.')
 param existingApplicationInsightsConnectionString string = ''
 
-@description('Optional. Existing Application Insights resource ID. Used for connection metadata when providing an existing App Insights.')
+@description('Optional. Existing Application Insights resource ID. Required when existingApplicationInsightsConnectionString is provided.')
 param existingApplicationInsightsResourceId string = ''
 
-@description('Optional. Name of an existing Application Insights connection on the Foundry project. If provided, no new App Insights or connection will be created.')
+@description('Optional. Name of an existing Application Insights connection on the Foundry project. Only set this when the existing connection is already present and valid. If set without both existingApplicationInsightsConnectionString and existingApplicationInsightsResourceId, the template treats it as incomplete and will still create/update appi-connection.')
 param existingAppInsightsConnectionName string = ''
 
 // Tags that should be applied to all resources.
@@ -115,14 +122,14 @@ resource rg 'Microsoft.Resources/resourceGroups@2021-04-01' = {
 // Build dependent resources array conditionally
 // Check if ACR already exists in the user-provided array to avoid duplicates
 // Also skip if user provided an existing container registry endpoint or connection name
-var hasAcr = contains(map(aiProjectDependentResources, r => r.resource), 'registry')
+var hasAcr = contains(map(normalizedDependentResources, r => r.resource), 'registry')
 var shouldCreateAcr = enableHostedAgents && !hasAcr && empty(existingContainerRegistryResourceId) && empty(existingAcrConnectionName)
-var dependentResources = shouldCreateAcr ? union(aiProjectDependentResources, [
+var dependentResources = shouldCreateAcr ? union(normalizedDependentResources, [
   {
     resource: 'registry'
     connectionName: 'acr-connection'
   }
-]) : aiProjectDependentResources
+]) : normalizedDependentResources
 
 // AI Project module
 module aiProject 'core/ai/ai-project.bicep' = {
@@ -188,3 +195,5 @@ output AZURE_AI_SEARCH_SERVICE_NAME string = aiProject.outputs.dependentResource
 // Azure Storage
 output AZURE_STORAGE_CONNECTION_NAME string = aiProject.outputs.dependentResources.storage.connectionName
 output AZURE_STORAGE_ACCOUNT_NAME string = aiProject.outputs.dependentResources.storage.accountName
+output APPROVAL_AUDIT_TABLE_NAME string = aiProject.outputs.dependentResources.storage.approvalAuditTableName
+output AZURE_STORAGE_TABLE_ENDPOINT string = aiProject.outputs.dependentResources.storage.tableEndpoint

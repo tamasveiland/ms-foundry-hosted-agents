@@ -24,6 +24,9 @@ param aiProjectName string = ''
 @description('Name for the AI Foundry storage connection')
 param connectionName string = 'storage-connection'
 
+@description('Name of the Azure Table used for approval audit records')
+param approvalAuditTableName string = 'ApprovalAudit'
+
 // Storage Account for the AI Services account
 resource storageAccount 'Microsoft.Storage/storageAccounts@2023-05-01' = {
   name: resourceName
@@ -55,6 +58,16 @@ resource storageAccount 'Microsoft.Storage/storageAccounts@2023-05-01' = {
   }
 }
 
+resource tableService 'Microsoft.Storage/storageAccounts/tableServices@2023-05-01' = {
+  parent: storageAccount
+  name: 'default'
+}
+
+resource approvalAuditTable 'Microsoft.Storage/storageAccounts/tableServices/tables@2023-05-01' = {
+  parent: tableService
+  name: approvalAuditTableName
+}
+
 // Get reference to the AI Services account and project to access their managed identities
 resource aiAccount 'Microsoft.CognitiveServices/accounts@2025-04-01-preview' existing = if (!empty(aiServicesAccountName) && !empty(aiProjectName)) {
   name: aiServicesAccountName
@@ -70,7 +83,18 @@ resource storageRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-
   scope: storageAccount
   properties: {
     roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'ba92f5b4-2d11-453d-a403-e96b0029c9fe') // Storage Blob Data Contributor
-    principalId: aiAccount::aiProject.identity.principalId
+    principalId: aiAccount::aiProject!.identity.principalId
+    principalType: 'ServicePrincipal'
+  }
+}
+
+// Role assignment for AI Services to access tables in the storage account.
+resource storageTableRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (!empty(aiServicesAccountName) && !empty(aiProjectName)) {
+  name: guid(storageAccount.id, aiAccount.id, 'ai-storage-table-contributor')
+  scope: storageAccount
+  properties: {
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '0a9a7e1f-b9d0-4cc4-a60d-0319b160aaa3') // Storage Table Data Contributor
+    principalId: aiAccount::aiProject!.identity.principalId
     principalType: 'ServicePrincipal'
   }
 }
@@ -81,6 +105,17 @@ resource userStorageRoleAssignment 'Microsoft.Authorization/roleAssignments@2022
   scope: storageAccount
   properties: {
     roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'ba92f5b4-2d11-453d-a403-e96b0029c9fe') // Storage Blob Data Contributor
+    principalId: principalId
+    principalType: principalType
+  }
+}
+
+// User permissions - Storage Table Data Contributor
+resource userStorageTableRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(storageAccount.id, principalId, 'Storage Table Data Contributor')
+  scope: storageAccount
+  properties: {
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '0a9a7e1f-b9d0-4cc4-a60d-0319b160aaa3') // Storage Table Data Contributor
     principalId: principalId
     principalType: principalType
   }
@@ -110,4 +145,6 @@ module storageConnection '../ai/connection.bicep' = if (!empty(aiServicesAccount
 output storageAccountName string = storageAccount.name
 output storageAccountId string = storageAccount.id
 output storageAccountPrincipalId string = storageAccount.identity.principalId
-output storageConnectionName string = storageConnection.outputs.connectionName
+output storageConnectionName string = (!empty(aiServicesAccountName) && !empty(aiProjectName)) ? storageConnection!.outputs.connectionName : ''
+output approvalAuditTableName string = approvalAuditTable.name
+output storageTableEndpoint string = storageAccount.properties.primaryEndpoints.table

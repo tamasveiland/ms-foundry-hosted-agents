@@ -16,8 +16,6 @@ services:
                 resources:
                     cpu: "1"
                     memory: 2Gi
-                scale:
-                    maxReplicas: 1
             deployments:
                 - model:
                     format: OpenAI
@@ -39,8 +37,6 @@ services:
                 resources:
                     cpu: "0.25"
                     memory: 0.5Gi
-                scale:
-                    maxReplicas: 1
             deployments:
                 - model:
                     format: OpenAI

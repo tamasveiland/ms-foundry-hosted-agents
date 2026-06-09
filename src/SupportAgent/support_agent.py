@@ -3,8 +3,9 @@ import os
 import logging
 import time
 import uuid
-from typing import Annotated
+from typing import Annotated, Any
 
+import httpx
 from azure.identity import DefaultAzureCredential
 from agent_framework import (
     Agent,
@@ -31,6 +32,46 @@ _azure_monitor_logger.setLevel(logging.ERROR)
 _azure_monitor_logger.propagate = False
 
 
+def _as_dict(arguments: Any) -> dict[str, Any]:
+    if isinstance(arguments, dict):
+        return arguments
+    if hasattr(arguments, "items"):
+        return dict(arguments.items())
+    return {}
+
+
+async def _request_refund_approval(function_name: str, arguments: dict[str, Any]) -> tuple[bool, str, str, str]:
+    service_url = os.getenv("APPROVAL_SERVICE_URL", "").strip()
+    if not service_url:
+        service_url = "http://localhost:8090"
+        logger.warning("APPROVAL_SERVICE_URL not set. Falling back to %s", service_url)
+
+    timeout_seconds = float(os.getenv("APPROVAL_TIMEOUT_SECONDS", "240"))
+    correlation_id = f"approval_{uuid.uuid4().hex[:16]}"
+    headers = {"Content-Type": "application/json"}
+
+    api_key = os.getenv("APPROVAL_SERVICE_API_KEY", "").strip()
+    if api_key:
+        headers["x-approval-key"] = api_key
+
+    payload = {
+        "function_name": function_name,
+        "arguments": arguments,
+        "correlation_id": correlation_id,
+    }
+
+    endpoint = f"{service_url.rstrip('/')}/approve"
+    async with httpx.AsyncClient(timeout=timeout_seconds) as client:
+        response = await client.post(endpoint, json=payload, headers=headers)
+        response.raise_for_status()
+        body = response.json()
+
+    approved = bool(body.get("approved", False))
+    reason = str(body.get("reason", "No decision reason provided."))
+    decision_id = str(body.get("decision_id", ""))
+    return approved, reason, decision_id, correlation_id
+
+# Auxiliary functions
 def _apply_streaming_function_name_workaround() -> None:
     """Patch known hosting bug where streamed function calls may have empty names."""
     try:
@@ -104,17 +145,45 @@ async def timing_logger(context: FunctionInvocationContext, next) -> None:
 
 @function_middleware
 async def approval_gate(context: FunctionInvocationContext, next) -> None:
-    """Human-in-the-loop: pause for approval before any refund executes."""
+    """External approval check before any refund executes."""
     if context.function.name == "issue_refund":
-        args = context.arguments
+        args = _as_dict(context.arguments)
         logger.warning("[APPROVAL REQUIRED] issue_refund(%s)", args)
-        decision = input("  Approve this refund? (y/n): ").strip().lower()
-        if decision != "y":
-            # Override the result and stop — the skill never runs.
-            context.result = "❌ Refund denied by human reviewer."
-            logger.info("Refund request denied by reviewer.")
+
+        try:
+            approved, reason, decision_id, correlation_id = await _request_refund_approval(
+                function_name=context.function.name,
+                arguments=args,
+            )
+        except Exception as ex:
+            fail_mode = os.getenv("APPROVAL_FAIL_MODE", "deny").strip().lower()
+            logger.exception("Approval service call failed: %s", ex)
+            if fail_mode == "allow":
+                logger.warning("Approval fallback mode is allow. Continuing without approval.")
+                await next()
+                return
+            context.result = (
+                "❌ Refund denied because approval service call failed "
+                f"({type(ex).__name__}: {ex})."
+            )
             return
-        logger.info("Refund request approved by reviewer.")
+
+        if not approved:
+            context.result = f"❌ Refund denied by approval service. Reason: {reason}"
+            logger.info(
+                "Refund denied. decision_id=%s correlation_id=%s reason=%s",
+                decision_id,
+                correlation_id,
+                reason,
+            )
+            return
+
+        logger.info(
+            "Refund approved. decision_id=%s correlation_id=%s reason=%s",
+            decision_id,
+            correlation_id,
+            reason,
+        )
     await next()
 
 # ---------------------------------------------------------------------------
